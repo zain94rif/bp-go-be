@@ -1,0 +1,194 @@
+openapi: 3.0.3
+info:
+  title: Employee Management API
+  version: 1.0.0
+  description: REST API for employee records and document metadata.
+security:
+  - bearerAuth: []
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      security: []
+      responses:
+        "200": {description: Service is running}
+  /ready:
+    get:
+      security: []
+      responses:
+        "200": {description: Database is available}
+        "503": {description: Database is unavailable}
+  /api/v1/employees:
+    get:
+      parameters:
+        - {name: search, in: query, schema: {type: string, maxLength: 100}}
+        - name: field
+          in: query
+          description: Field to search. Defaults to all fields.
+          schema:
+            type: string
+            default: all
+            enum: [all, nik, kpj, full_name, phone, email, birth_place, birth_date, address]
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        "200": {description: Employee list}
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/EmployeeInput"}
+      responses:
+        "201": {description: Employee created}
+        "409": {description: Duplicate NIK, KPJ, phone, or email}
+  /api/v1/auth/login:
+    post:
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: {type: string, format: email}
+                password: {type: string, format: password}
+                captcha_token: {type: string}
+      responses:
+        "200": {description: Access and refresh tokens}
+        "401": {description: Authentication or CAPTCHA failed}
+  /api/v1/auth/register:
+    post:
+      description: Create a user. ADMIN access is required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, role]
+              properties:
+                email: {type: string, format: email}
+                password: {type: string, minLength: 8}
+                role: {type: string, enum: [ADMIN, VIEWER]}
+      responses:
+        "201": {description: User created}
+        "401": {description: Authentication required}
+        "403": {description: ADMIN role required}
+        "409": {description: Email already exists}
+  /api/v1/auth/refresh:
+    post:
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: {type: string}
+      responses:
+        "200": {description: Rotated tokens}
+  /api/v1/auth/logout:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: {type: string}
+      responses:
+        "204": {description: Refresh token revoked}
+  /api/v1/employees/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      responses: {"200": {description: Employee detail}}
+    put:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/EmployeeInput"}
+      responses: {"200": {description: Employee updated}}
+    delete:
+      responses: {"204": {description: Employee soft deleted}}
+  /api/v1/employees/{id}/documents:
+    get:
+      responses: {"200": {description: Document metadata}}
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/DocumentInput"}
+      responses: {"201": {description: Document metadata created}}
+  /api/v1/employees/{id}/documents/upload:
+    post:
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        "201": {description: Diploma uploaded}
+  /api/v1/employees/{id}/documents/{documentID}/preview:
+    get:
+      responses: {"200": {description: Inline document stream}}
+  /api/v1/employees/{id}/documents/{documentID}/download:
+    get:
+      responses: {"200": {description: Download document stream}}
+  /api/v1/employees/{id}/photo:
+    get:
+      responses: {"200": {description: Employee photo}}
+    post:
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses: {"200": {description: Photo uploaded}}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    EmployeeInput:
+      type: object
+      required: [nik, kpj, full_name, phone, email, birth_place, birth_date, address]
+      properties:
+        nik: {type: string, pattern: "^[0-9]{16}$"}
+        kpj: {type: string, maxLength: 50}
+        full_name: {type: string, maxLength: 150}
+        phone: {type: string, maxLength: 30}
+        email: {type: string, format: email}
+        birth_place: {type: string, maxLength: 100}
+        birth_date: {type: string, format: date}
+        address: {type: string}
+        photo_path: {type: string, readOnly: true}
+    DocumentInput:
+      type: object
+      required: [type, file_name, file_path, mime_type, file_size]
+      properties:
+        type: {type: string, enum: [diploma]}
+        file_name: {type: string}
+        file_path: {type: string}
+        mime_type: {type: string}
+        file_size: {type: integer, format: int64, minimum: 1}

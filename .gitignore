@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+
+/storage/
+/tmp/
+/bin/
+/employees/
+
+*.log
+coverage.out
